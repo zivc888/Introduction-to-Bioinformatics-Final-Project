@@ -1,0 +1,27 @@
+---
+title: "Introduction to Bioinformatics"
+output: html_document
+---
+
+```{r}
+read_design <- function(filename) {
+  E <- read.csv(filename, sep = "\t")
+
+  rownames(E) <- E$Run
+  
+  E <- E[c("Sample.Characteristic.disease.", "Sample.Characteristic.organism.part.")]
+  colnames(E) <- c("Diagnosis", "Brodmann (1909) Area")
+
+  E[E == "bipolar disorder"] = "bipolar"
+  E$`Brodmann (1909) Area` <- sub("Brodmann \\(1909\\) area ", "", E$`Brodmann (1909) Area`)
+  
+  E[E == "dorsolateral prefrontal cortex"] = "9,46"
+  
+  return(E)
+}
+
+E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
+E5 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
+
+metadata <- rbind(E5, E7)
+```
