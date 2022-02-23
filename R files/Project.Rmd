@@ -1,0 +1,73 @@
+---
+title: "Introduction to Bioinformatics"
+output: html_document
+---
+
+```{r}
+library(DESeq2) 
+library(limma)
+library(EnhancedVolcano)
+
+# create a function to read experiment designs
+read_design <- function(filename) {
+  E <- read.csv(filename, sep = "\t")
+
+  rownames(E) <- E$Run
+  
+  E <- E[c("Sample.Characteristic.disease.", "Sample.Characteristic.organism.part.")]
+  colnames(E) <- c("Diagnosis", "Brodmann (1909) Area")
+
+  E[E == "bipolar disorder"] = "bipolar"
+  E$`Brodmann (1909) Area` <- sub("Brodmann \\(1909\\) area ", "", E$`Brodmann (1909) Area`)
+  
+  E[E == "dorsolateral prefrontal cortex"] = "46"
+  
+  return(E)
+}
+
+```
+
+```{r}
+# read the experiments' designs
+E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
+E5 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
+
+# bind metadatas together
+metadata <- rbind(E7)
+
+# read counts data
+data1 <- read.csv("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-raw-counts.tsv", sep = "\t");
+data2 <- read.csv("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-raw-counts.tsv", sep = "\t");
+
+# bind counts data from the experiments
+counts <- cbind(data2[-2])
+counts <- counts[sort(colnames(counts))]
+
+# take the gene names from the counts data
+genes.symbols <- data1[,2]
+```
+
+```{r}
+# run DESeq2 on combined data from both experiments
+dds <- DESeqDataSetFromMatrix(countData=counts, colData=metadata, design= ~Diagnosis, tidy=TRUE)
+
+dds <- DESeq(dds)
+
+# do logfold change
+resLFC.bipolar.normal <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
+
+resLFC.bipolar.normal["symbol"] <- genes.symbols
+
+resOrdered.bipolar.normal <- resLFC.bipolar.normal[order(resLFC.bipolar.normal$pvalue),]
+
+# create a volcano plot
+EnhancedVolcano(resLFC.bipolar.normal, lab = resLFC.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
+
+# normalize our data
+dds.norm <- vst(dds, blind=T)
+rownames(dds.norm) <- genes.symbols
+
+# make a pca plot
+plotPCA(dds.norm, ntop=1000, intgroup=c("Brodmann (1909) Area"))
+
+``` 
