@@ -1,0 +1,97 @@
+---
+title: "limmaTry"
+author: "Noam Barash Biram & Ziv Cohen"
+date: "2/27/2022"
+output: html_document
+---
+
+```{r}
+# create a function to read experiment designs
+read_design <- function(filename) {
+  E <- read.delim(filename)
+
+  rownames(E) <- E$Run
+  
+  E <- E[c("Sample.Characteristic.disease.", "Sample.Characteristic.organism.part.")]
+  colnames(E) <- c("Diagnosis", "Brodmann (1909) Area")
+
+  E[E == "bipolar disorder"] = "bipolar"
+  E$`Brodmann (1909) Area` <- sub("Brodmann \\(1909\\) area ", "", E$`Brodmann (1909) Area`)
+  
+  E[E == "dorsolateral prefrontal cortex"] = "46"
+  
+  return(E)
+}
+
+```
+
+```{r}
+library(limma)
+library(tidyr)
+library(ggplot2)
+library(edgeR)
+library(EnhancedVolcano)
+library(DESeq2)
+
+data1 <- read.delim("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-raw-counts.tsv");
+data2 <- read.delim("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-raw-counts.tsv");
+data3 <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-A-AFFY-33-normalized-expressions.tsv")
+
+meta3 <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-experiment-design.tsv")
+meta1 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
+
+# bind counts data from the experiments
+counts <- data1[-2]
+counts <- counts[!duplicated(counts$Gene.ID), ]
+counts <- counts[sort(colnames(counts))]
+
+# take the gene names from the counts data
+genes.symbols <- data1[,2]
+
+dds <- DESeqDataSetFromMatrix(countData=counts, colData=meta1, design= ~Diagnosis, tidy=TRUE)
+
+
+row.names(counts) <- counts$Gene.ID
+meta1$Diagnosis <- factor(meta1$Diagnosis)
+
+design <- model.matrix(~meta1$Diagnosis)
+
+dge <- DGEList(counts=counts)
+
+keep <- filterByExpr(dge, design)
+
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+
+dge <- calcNormFactors(dge)
+
+v <- voom(dge, design=design, plot=TRUE)
+
+fit <- lmFit(v, design)
+fit <- eBayes(fit, trend=TRUE)
+
+tt <- topTable(fit, number=Inf)
+
+EnhancedVolcano(tt,lab = rownames(tt),x = "logFC", y = "adj.P.Val", pCutoff = 0.05, FCcutoff = 0.1)
+
+```
+
+```{r}
+library("AnnotationDbi")
+library("hgu133a.db")    ##for Human
+
+data8 <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-processed-data-1435128605.txt")
+data8 <- cbind(data8[,1], data8)
+data8 <- data8[-1,]
+
+out <- select(hgu133a.db,keys= data8$Scan.REF, columns=c("PROBEID", "ENSEMBL", "SYMBOL"))
+
+out <- out[!duplicated(out$ENSEMBL),]
+out <- out[!duplicated(out$PROBEID),]
+out <- out[!is.na(out$ENSEMBL),]
+
+data8 <- data8[data8$Scan.REF %in% out$PROBEID,]
+data8[1:2] <- out[2:3]
+colnames(data8)[1:2] <- c("Gene.ID", "Gene Name")
+
+
+```
