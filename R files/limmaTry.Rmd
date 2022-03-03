@@ -37,24 +37,23 @@ data1 <- read.delim("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-raw-counts
 data2 <- read.delim("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-raw-counts.tsv");
 data3 <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-A-AFFY-33-normalized-expressions.tsv")
 
-meta3 <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-experiment-design.tsv")
+meta3 <- read_design("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-experiment-design-deleted-person.tsv")
 meta1 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
 
 # bind counts data from the experiments
-counts <- data1[-2]
+counts <- data3[-2][-2]
 counts <- counts[!duplicated(counts$Gene.ID), ]
-counts <- counts[sort(colnames(counts))]
 
 # take the gene names from the counts data
-genes.symbols <- data1[,2]
-
-dds <- DESeqDataSetFromMatrix(countData=counts, colData=meta1, design= ~Diagnosis, tidy=TRUE)
-
+genes.symbols <- data3[,2]
 
 row.names(counts) <- counts$Gene.ID
-meta1$Diagnosis <- factor(meta1$Diagnosis)
+meta3$Diagnosis <- factor(meta3$Diagnosis)
 
-design <- model.matrix(~meta1$Diagnosis)
+
+counts <- counts[-1]
+
+counts <- counts[sort(colnames(counts))]
 
 dge <- DGEList(counts=counts)
 
@@ -64,14 +63,20 @@ dge <- dge[keep,,keep.lib.sizes=FALSE]
 
 dge <- calcNormFactors(dge)
 
+design <- model.matrix(~0 + meta3$Diagnosis)
+
 v <- voom(dge, design=design, plot=TRUE)
 
-fit <- lmFit(v, design)
+fit <- lmFit(counts, design)
 fit <- eBayes(fit, trend=TRUE)
 
-tt <- topTable(fit, number=Inf)
+tt <- topTable(fit, number=Inf, adjust = "fdr")
 
-EnhancedVolcano(tt,lab = rownames(tt),x = "logFC", y = "adj.P.Val", pCutoff = 0.05, FCcutoff = 0.1)
+results <- decideTests(fit)
+
+vennDiagram(results)
+
+EnhancedVolcano(tt,lab = genes.symbols, x = "P.Value", y = "adj.P.Val", pCutoff = 0.05, FCcutoff = 0.1)
 
 ```
 

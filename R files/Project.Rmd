@@ -3,6 +3,7 @@ title: "Introduction to Bioinformatics"
 output: html_document
 ---
 
+load libraries and define functions
 ```{r}
 library(DESeq2) 
 library(limma)
@@ -10,17 +11,17 @@ library(EnhancedVolcano)
 library(AnnotationDbi)
 library(hgu133a.db)
 
-# create a function to read experiment designs
+# function to read experiment designs from our datasets
 read_design <- function(filename) {
   E <- read.csv(filename, sep = "\t")
 
   rownames(E) <- E$Run
   
   E <- E[c("Sample.Characteristic.disease.", "Sample.Characteristic.organism.part.")]
-  colnames(E) <- c("Diagnosis", "Brodmann (1909) Area")
+  colnames(E) <- c("Diagnosis", "Brodmann")
 
   E[E == "bipolar disorder"] = "bipolar"
-  E$`Brodmann (1909) Area` <- sub("Brodmann \\(1909\\) area ", "", E$`Brodmann (1909) Area`)
+  E$`Brodmann` <- sub("Brodmann \\(1909\\) area ", "", E$`Brodmann`)
   
   E[E == "dorsolateral prefrontal cortex"] = "46"
   
@@ -29,9 +30,11 @@ read_design <- function(filename) {
 
 ```
 
-```{r}
-read_annoying_data <- function(filename){
-  data <- read.csv("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-processed-data-1435128605.txt", sep="\t")
+Not Used
+```{}
+# for unused data
+read_processed_data <- function(filename){
+  data <- read.delim(filename, sep="\t")
   data <- cbind(data[,1], data)
   data <- data[-1,]
 
@@ -47,20 +50,8 @@ read_annoying_data <- function(filename){
   
   return(data)
 }
-```
 
-```{r}
-# read the experiments' designs
-E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
-E5 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
-
-# bind metadatas together
-metadata <- rbind(E7)
-
-# read counts data
-data1 <- read.delim("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-raw-counts.tsv")
-data2 <- read.delim("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-raw-counts.tsv")
-data3 <- read_annoying_data("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-processed-data-1435128605.txt")
+data3 <- read_processed_data("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-processed-data-1435128605.txt")
 
 rownames(data3) <- data3[,1]
 
@@ -68,42 +59,111 @@ metadata <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-experimen
 
 colnames(metadata) <- c("Speciman", "Diagnosis")
 
-counts <- data3
-counts <- counts[-1][-1]
-counts <- counts[sort(colnames(counts))]
-
 rownames(metadata) <- metadata[,1]
 metadata <- metadata[-1]
 
-# take the gene names from the counts data
-genes.symbols <- data3[,2]
-
-dat <- as.data.frame(sapply(counts, as.numeric))
-
-dat <- round(dat)
+counts <- data3
+counts <- counts[-1][-1]
 ```
 
+Load Data
+```{r}
+# read the experiments' designs
+E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
+E5 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
+
+# add identifiers for each dataset
+E5 <- cbind(rep("GEOD-53239", times=nrow(E5)), E5)
+E7 <- cbind(rep("GEOD-78936", times=nrow(E7)), E7)
+
+colnames(E5)[1] = colnames(E7)[1] = "Dataset"
+
+# combine metadata
+metadata <- rbind(E5, E7)
+
+# read counts data
+data1 <- read.delim("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-raw-counts.tsv")
+data2 <- read.delim("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-raw-counts.tsv")
+
+# combine only the counts data
+counts <- cbind(data1[-1][-1], data2[-1][-1])
+counts <- counts[sort(colnames(counts))]
+
+# take the gene names from the counts data
+genes.symbols <- data1[,2]
+```
+
+
+Run DESeq2
 ```{r}
 # run DESeq2 on combined data from both experiments
-dds <- DESeqDataSetFromMatrix(countData=dat, colData=metadata, design= ~Diagnosis)
-
+# use Dataset to distinguish between them which will remove the batch effect
+dds <- DESeqDataSetFromMatrix(countData=counts, colData=metadata, design= ~Brodmann + Diagnosis)
 dds <- DESeq(dds)
+```
 
-# do logfold change
-resLFC.bipolar.normal <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar disorder", "normal"), type = "ashr")
 
+Analyze the data:
+```{r}
+# do logfold change for Diagnosis
+resLFC.bipolar.normal <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
 resLFC.bipolar.normal["symbol"] <- genes.symbols
-
 resOrdered.bipolar.normal <- resLFC.bipolar.normal[order(resLFC.bipolar.normal$pvalue),]
 
-# create a volcano plot
-EnhancedVolcano(resLFC.bipolar.normal, lab = resLFC.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
+resLFC.areas <- lfcShrink(dds, contrast = c("Brodmann", "9", "11"), type = "ashr")
+resLFC.areas["symbol"] <- genes.symbols
+resOrdered.areas <- resLFC.areas[order(resLFC.areas$pvalue),]
 
 # normalize our data
-dds.norm <- vst(dds, blind=T)
+dds.norm <- vst(dds, blind=F)
 rownames(dds.norm) <- genes.symbols
 
-# make a pca plot
-plotPCA(dds.norm, ntop=1000, intgroup=c("Brodmann (1909) Area"))
+# remove batch effect for PCA
+mat <- assay(dds.norm)
+mat <- removeBatchEffect(mat, dds.norm$Dataset)
+assay(dds.norm) <- mat
+```
 
-``` 
+
+Make some nice looking graphs :)
+```{r}
+# create a volcano plot
+EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
+EnhancedVolcano(resOrdered.areas, lab = resOrdered.areas$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
+
+# make some pca plots
+plotPCA(dds.norm, intgroup=c("Diagnosis"))
+plotPCA(dds.norm, intgroup=c("Brodmann"))
+plotPCA(dds.norm, intgroup=c("Diagnosis", "Brodmann"))
+```
+
+Some count plots for significant genes :)
+```{r}
+rownames(dds) <- genes.symbols
+
+for (gene in c("LINC02340", "MTND6P4", "MT1X")) {
+  gene.index <- which(genes.symbols %in% gene)
+  plot <- plotCounts(dds, gene = rownames(dds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
+  print(ggplot(plot, aes(x = Diagnosis, y = count)) + geom_violin())
+}
+```
+
+
+And Pathway analysis :)
+```{r}
+DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
+DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
+names(DE_genes_list) <- DE_genes_entrez_rank$symbol
+DE_genes_list <- sort(DE_genes_list, decreasing=TRUE)
+
+hallmarks <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, gene_symbol)
+
+hm <- GSEA(DE_genes_list, TERM2GENE = hallmarks)
+
+hallmarks <- msigdbr(species = "Homo sapiens", category = "H")
+hallmarks <- hallmarks[,c('gs_name', 'gene_symbol')]
+dotplot(hm)
+```
+
+```
+
