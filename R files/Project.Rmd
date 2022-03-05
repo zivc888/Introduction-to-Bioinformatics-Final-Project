@@ -10,6 +10,9 @@ library(limma)
 library(EnhancedVolcano)
 library(AnnotationDbi)
 library(hgu133a.db)
+library(dplyr)
+library(msigdbr)
+library(clusterProfiler)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -97,7 +100,8 @@ genes.symbols <- data1[,2]
 Run DESeq2
 ```{r}
 # run DESeq2 on combined data from both experiments
-# use Dataset to distinguish between them which will remove the batch effect
+# using Dataset to distinguish between them which will remove the batch effect. 
+# Since Dataset is a division contained in Brodmann, using Brodmann is enough
 dds <- DESeqDataSetFromMatrix(countData=counts, colData=metadata, design= ~Brodmann + Diagnosis)
 dds <- DESeq(dds)
 ```
@@ -106,13 +110,34 @@ dds <- DESeq(dds)
 Analyze the data:
 ```{r}
 # do logfold change for Diagnosis
+# normal vs bipolar
 resLFC.bipolar.normal <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
 resLFC.bipolar.normal["symbol"] <- genes.symbols
 resOrdered.bipolar.normal <- resLFC.bipolar.normal[order(resLFC.bipolar.normal$pvalue),]
 
-resLFC.areas <- lfcShrink(dds, contrast = c("Brodmann", "9", "11"), type = "ashr")
-resLFC.areas["symbol"] <- genes.symbols
-resOrdered.areas <- resLFC.areas[order(resLFC.areas$pvalue),]
+# bipolar vs schizophrenia
+resLFC.bipolar.schizo <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar", "schizophrenia"), type = "ashr")
+resLFC.bipolar.schizo["symbol"] <- genes.symbols
+resOrdered.bipolar.schizo <- resLFC.bipolar.schizo[order(resLFC.bipolar.schizo$pvalue),]
+
+# differentiate brain areas
+areas <- c(9, 11, 24, 46)
+resLFC.areas <- list()
+resOrdered.areas <- list()
+comparisons <- list()
+i <- 1
+for (a1 in areas){
+  for (a2 in areas[areas > a1]){
+    comparison <- paste0(a1, " vs ", a2)
+    print(paste0("Calculating ", comparison))
+    resLFC.areas[[i]] <- lfcShrink(dds, contrast = c("Brodmann", a1, a2), type = "ashr")
+    resLFC.areas[[i]]["symbol"] <- genes.symbols
+    resOrdered.areas[[i]] <- resLFC.areas[[i]][order(resLFC.areas[[i]]$pvalue),]
+    comparisons[[i]] <- comparison
+    i <- i+1
+  }
+}
+
 
 # normalize our data
 dds.norm <- vst(dds, blind=F)
@@ -128,8 +153,11 @@ assay(dds.norm) <- mat
 Make some nice looking graphs :)
 ```{r}
 # create a volcano plot
-EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
-EnhancedVolcano(resOrdered.areas, lab = resOrdered.areas$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10)
+EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs normal")
+EnhancedVolcano(resOrdered.bipolar.schizo, lab = resOrdered.bipolar.schizo$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs schizophrenia")
+for (i in seq_along(comparisons)){
+  print(EnhancedVolcano(resOrdered.areas[[i]], lab = resOrdered.areas[[i]]$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title=comparisons))
+}
 
 # make some pca plots
 plotPCA(dds.norm, intgroup=c("Diagnosis"))
@@ -147,8 +175,7 @@ for (gene in c("LINC02340", "MTND6P4", "MT1X")) {
   print(ggplot(plot, aes(x = Diagnosis, y = count)) + geom_violin())
 }
 ```
-
-
+5
 And Pathway analysis :)
 ```{r}
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
@@ -162,8 +189,22 @@ hm <- GSEA(DE_genes_list, TERM2GENE = hallmarks)
 
 hallmarks <- msigdbr(species = "Homo sapiens", category = "H")
 hallmarks <- hallmarks[,c('gs_name', 'gene_symbol')]
-dotplot(hm)
+dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
+
+# We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
 
+```{r}
+normcounts <- assay(vst(dds, blind=T))
+colnames(normcounts) <- paste0(metadata$Diagnosis, seq(1, length(metadata$Diagnosis)))
+var_per_gene <- apply(normcounts, 1, var)
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
+normcounts.top1Kvar <- normcounts[selectedGenes,]
+
+dist_mat <- dist(normcounts.top1Kvar, method = 'euclidean')
+
+hclust_avg <- hclust(dist_mat, method = 'average')
+plot(hclust_avg, cex = 0.6, hang = -1)
+rect.hclust(hclust_avg, k = 2, border = 2:8)
 ```
 
