@@ -1,4 +1,3 @@
 * Comparison of Bipolar vs. Schizophrenia vs. Normal
 * Classification of Bipolar subtypes
 * Comparison of Bipolar xCell to Normal xCell
-* 
