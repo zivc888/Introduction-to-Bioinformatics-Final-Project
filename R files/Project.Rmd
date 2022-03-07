@@ -130,7 +130,7 @@ for (a1 in areas){
   for (a2 in areas[areas > a1]){
     comparison <- paste0(a1, " vs ", a2)
     print(paste0("Calculating ", comparison))
-    resLFC.areas[[i]] <- lfcShrink(dds, contrast = c("Brodmann", a1, a2), type = "ashr")
+    resLFC.areas[[i]] <- lfcShrink(dds[dds$Brodmann %in% c(a1, a2)], contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
     resLFC.areas[[i]]["symbol"] <- genes.symbols
     resOrdered.areas[[i]] <- resLFC.areas[[i]][order(resLFC.areas[[i]]$pvalue),]
     comparisons[[i]] <- comparison
@@ -156,7 +156,7 @@ Make some nice looking graphs :)
 EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs normal")
 EnhancedVolcano(resOrdered.bipolar.schizo, lab = resOrdered.bipolar.schizo$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs schizophrenia")
 for (i in seq_along(comparisons)){
-  print(EnhancedVolcano(resOrdered.areas[[i]], lab = resOrdered.areas[[i]]$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title=comparisons))
+  print(EnhancedVolcano(resOrdered.areas[[i]], lab = resOrdered.areas[[i]]$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title=comparisons[i]))
 }
 
 # make some pca plots
@@ -169,15 +169,34 @@ Some count plots for significant genes :)
 ```{r}
 rownames(dds) <- genes.symbols
 
-for (gene in c("LINC02340", "MTND6P4", "MT1X")) {
+genes <- c("LINC02340", "MTND6P4", "MT1X")
+
+cutoffs <- c(50, 100, 500)
+
+for (gene in genes) {
   gene.index <- which(genes.symbols %in% gene)
   plot <- plotCounts(dds, gene = rownames(dds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
-  print(ggplot(plot, aes(x = Diagnosis, y = count)) + geom_violin())
+  print(
+    ggplot(plot, aes(x = Diagnosis, y = count, fill=Diagnosis)) + 
+      geom_violin(draw_quantiles = 0.5) + 
+      geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
+      theme(legend.position="none")  + 
+      ggtitle(paste0("Gene Expression of ", gene))
+    )
+  
+  print(
+    ggplot(plot[plot$count < cutoffs[which(genes == gene)],], aes(x = Diagnosis, y = count, fill=Diagnosis)) + 
+      geom_violin(draw_quantiles = 0.5) + 
+      geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
+      theme(legend.position="none")  + 
+      ggtitle(paste0("Cut Gene Expression of ", gene))
+    )
 }
 ```
-5
 And Pathway analysis :)
 ```{r}
+# try subtyping and checking them here
+
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
 names(DE_genes_list) <- DE_genes_entrez_rank$symbol
@@ -195,16 +214,47 @@ dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bip
 ```
 
 ```{r}
-normcounts <- assay(vst(dds, blind=T))
-colnames(normcounts) <- paste0(metadata$Diagnosis, seq(1, length(metadata$Diagnosis)))
+normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
+colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
 var_per_gene <- apply(normcounts, 1, var)
-selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
-normcounts.top1Kvar <- normcounts[selectedGenes,]
-
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:29])
+normcounts.top1Kvar <- t(normcounts[selectedGenes,])
 dist_mat <- dist(normcounts.top1Kvar, method = 'euclidean')
 
 hclust_avg <- hclust(dist_mat, method = 'average')
 plot(hclust_avg, cex = 0.6, hang = -1)
 rect.hclust(hclust_avg, k = 2, border = 2:8)
+```
+
+Heatmap cause we can :(
+```{r}
+library(pheatmap)
+library(org.Hs.eg.db)
+
+normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
+
+dds.symbol <- dds
+rownames(dds.symbol) <- mapIds(org.Hs.eg.db,
+                              keys=data1$Gene.ID,
+                              column="SYMBOL",
+                              keytype="ENSEMBL",
+                              multiVals="first")
+
+rownames(dds.symbol)[is.na(rownames(dds.symbol))] <- rownames(dds)[is.na(rownames(dds.symbol))]
+rownames(dds.symbol) <- make.unique(rownames(dds.symbol))
+
+df <- data.frame(row.names = colnames(dds.symbol),
+                 diagnosis = colData(dds.symbol)$Diagnosis)
+
+# Take top 10 genes with the lowest p-value that express in Bipolar (log2FoldChange>0)
+selectUp <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange>0][1:20]
+# Take top 10 genes with the lowest p-value that express in Healthy (log2FoldChange<0)
+selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange<0][1:20]
+
+selected <- c(selectUp,selectDown)
+
+pheatmap(normcounts[selected,], cluster_rows=TRUE,
+         show_colnames = FALSE, cluster_cols=TRUE, 
+         annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
 ```
 
