@@ -169,9 +169,9 @@ Some count plots for significant genes :)
 ```{r}
 rownames(dds) <- genes.symbols
 
-genes <- c("LINC02340", "MTND6P4", "MT1X")
+genes <- c("LINC02340", "MTND6P4", "MT1X", "IL1RL1")
 
-cutoffs <- c(50, 100, 500)
+cutoffs <- c(50, 100, 500, 75)
 
 for (gene in genes) {
   gene.index <- which(genes.symbols %in% gene)
