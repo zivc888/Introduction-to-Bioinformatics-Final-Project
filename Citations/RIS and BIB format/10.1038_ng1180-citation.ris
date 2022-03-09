@@ -1,0 +1,36 @@
+TY  - JOUR
+AU  - Mootha, Vamsi K
+AU  - Lindgren, Cecilia M
+AU  - Eriksson, Karl-Fredrik
+AU  - Subramanian, Aravind
+AU  - Sihag, Smita
+AU  - Lehar, Joseph
+AU  - Puigserver, Pere
+AU  - Carlsson, Emma
+AU  - Ridderstråle, Martin
+AU  - Laurila, Esa
+AU  - Houstis, Nicholas
+AU  - Daly, Mark J
+AU  - Patterson, Nick
+AU  - Mesirov, Jill P
+AU  - Golub, Todd R
+AU  - Tamayo, Pablo
+AU  - Spiegelman, Bruce
+AU  - Lander, Eric S
+AU  - Hirschhorn, Joel N
+AU  - Altshuler, David
+AU  - Groop, Leif C
+PY  - 2003
+DA  - 2003/07/01
+TI  - PGC-1α-responsive genes involved in oxidative phosphorylation are coordinately downregulated in human diabetes
+JO  - Nature Genetics
+SP  - 267
+EP  - 273
+VL  - 34
+IS  - 3
+AB  - DNA microarrays can be used to identify gene expression changes characteristic of human disease. This is challenging, however, when relevant differences are subtle at the level of individual genes. We introduce an analytical strategy, Gene Set Enrichment Analysis, designed to detect modest but coordinate changes in the expression of groups of functionally related genes. Using this approach, we identify a set of genes involved in oxidative phosphorylation whose expression is coordinately decreased in human diabetic muscle. Expression of these genes is high at sites of insulin-mediated glucose disposal, activated by PGC-1α and correlated with total-body aerobic capacity. Our results associate this gene set with clinically important variation in human metabolism and illustrate the value of pathway relationships in the analysis of genomic profiling experiments.
+SN  - 1546-1718
+UR  - https://doi.org/10.1038/ng1180
+DO  - 10.1038/ng1180
+ID  - Mootha2003
+ER  - 
