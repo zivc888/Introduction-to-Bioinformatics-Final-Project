@@ -127,10 +127,10 @@ resOrdered.areas <- list()
 comparisons <- list()
 i <- 1
 for (a1 in areas){
-  for (a2 in areas[areas > a1]){
-    comparison <- paste0(a1, " vs ", a2)
+  for (control in c("normal", "schizophrenia")){
+    comparison <- paste0("Bipolar vs ", control, " in ", a1)
     print(paste0("Calculating ", comparison))
-    resLFC.areas[[i]] <- lfcShrink(dds[dds$Brodmann %in% c(a1, a2)], contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
+    resLFC.areas[[i]] <- lfcShrink(dds[dds$Brodmann == a1], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
     resLFC.areas[[i]]["symbol"] <- genes.symbols
     resOrdered.areas[[i]] <- resLFC.areas[[i]][order(resLFC.areas[[i]]$pvalue),]
     comparisons[[i]] <- comparison
@@ -181,7 +181,7 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Gene Expression of ", gene))
+      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index]))
     )
   
   print(
@@ -189,7 +189,7 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Cut Gene Expression of ", gene))
+      ggtitle(paste0("Cut Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index]))
     )
 }
 ```
@@ -212,7 +212,7 @@ dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bip
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
-
+Clustering (not checked yet)
 ```{r}
 normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
 colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
