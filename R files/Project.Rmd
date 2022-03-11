@@ -9,10 +9,11 @@ library(DESeq2)
 library(limma)
 library(EnhancedVolcano)
 library(AnnotationDbi)
-library(hgu133a.db)
 library(dplyr)
 library(msigdbr)
 library(clusterProfiler)
+library(scales)
+library(ggpubr)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -173,6 +174,8 @@ genes <- c("LINC02340", "MTND6P4", "MT1X", "IL1RL1")
 
 cutoffs <- c(50, 100, 500, 75)
 
+means_comp <-list(c("bipolar", "normal"), c("bipolar", "schizophrenia"), c("normal", "schizophrenia"))
+
 for (gene in genes) {
   gene.index <- which(genes.symbols %in% gene)
   plot <- plotCounts(dds, gene = rownames(dds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
@@ -181,21 +184,37 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index]))
+      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index])) +
+      stat_compare_means(label.y = log10(max(plot$count)*10)) + stat_compare_means(label = "p.signif", comparisons = means_comp) +
+      scale_y_continuous(trans = log10_trans())
     )
-  
+}
+
+areaSpecific <- data.frame(GeneName = c("CENPL", "C2orf83", "LACRT", "KRT18P11"), Brodmann = c(9, 24, 46, 46))
+cutoffs <- c(30)
+
+for (geneIndex in 1:nrow(areaSpecific)) {
+  area <- areaSpecific[geneIndex,]$Brodmann
+  gene <- areaSpecific[geneIndex,]$GeneName
+  gene.index <- which(genes.symbols == gene)
+  thisDds = dds[dds$Brodmann == area]
+  plot <- plotCounts(thisDds, gene = rownames(thisDds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
   print(
-    ggplot(plot[plot$count < cutoffs[which(genes == gene)],], aes(x = Diagnosis, y = count, fill=Diagnosis)) + 
+    ggplot(plot, aes(x = Diagnosis, y = count, fill=Diagnosis)) + 
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Cut Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index]))
+      ggtitle(paste0("Gene Expression of ", gene, " in ", area)) + 
+      scale_y_continuous(trans = log10_trans()) +
+      stat_compare_means(label.y = log10(max(plot$count))+1.5) + stat_compare_means(label = "p.signif", comparisons = means_comp)
     )
 }
 ```
 And Pathway analysis :)
 ```{r}
 # try subtyping and checking them here
+
+set.seed(86499)
 
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
@@ -206,8 +225,6 @@ hallmarks <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select
 
 hm <- GSEA(DE_genes_list, TERM2GENE = hallmarks)
 
-hallmarks <- msigdbr(species = "Homo sapiens", category = "H")
-hallmarks <- hallmarks[,c('gs_name', 'gene_symbol')]
 dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
