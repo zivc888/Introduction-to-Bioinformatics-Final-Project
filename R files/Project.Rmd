@@ -184,7 +184,7 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index])) +
+      ggtitle(paste0("Gene Expression of ", gene)) +
       stat_compare_means(label.y = log10(max(plot$count)*10)) + stat_compare_means(label = "p.signif", comparisons = means_comp) +
       scale_y_continuous(trans = log10_trans())
     )
@@ -226,7 +226,9 @@ hm <- GSEA(DE_genes_list,
              TERM2GENE=hallmarks, 
              nPerm=1000000)
 
-dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
+dotplot(hm, showCategory = Inf, title="Pathway Analysis with GSEA, normal VS bipolar")
+ridgeplot(hm) + labs(x = "enrichment distribution")
+cnetplot(hm, categorySize="pvalue", foldChange=sort(colnames(counts), decreasing=TRUE), showCategory = 3)
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
