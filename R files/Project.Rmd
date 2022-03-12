@@ -14,6 +14,8 @@ library(msigdbr)
 library(clusterProfiler)
 library(scales)
 library(ggpubr)
+library(ggplot2)
+library(enrichplot)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -184,7 +186,7 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Gene Expression of ", gene)) +
+      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index])) +
       stat_compare_means(label.y = log10(max(plot$count)*10)) + stat_compare_means(label = "p.signif", comparisons = means_comp) +
       scale_y_continuous(trans = log10_trans())
     )
@@ -214,21 +216,23 @@ And Pathway analysis :)
 ```{r}
 # try subtyping and checking them here
 
+# remove NAs and create sorted genes list with LFC values and ENSMBLE ID as names
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
 names(DE_genes_list) <- DE_genes_entrez_rank$symbol
 DE_genes_list <- sort(DE_genes_list, decreasing=TRUE)
 
+# collect hallmarks
 hallmarks <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, gene_symbol)
 
 # set nPerm to million so it's absolutely precise and does not change when the random seed changes
-hm <- GSEA(DE_genes_list, 
-             TERM2GENE=hallmarks, 
-             nPerm=1000000)
+hm <- GSEA(DE_genes_list, TERM2GENE=hallmarks, nPerm=1000000)
 
-dotplot(hm, showCategory = Inf, title="Pathway Analysis with GSEA, normal VS bipolar")
+# create a ridgeplot
 ridgeplot(hm) + labs(x = "enrichment distribution")
-cnetplot(hm, categorySize="pvalue", foldChange=sort(colnames(counts), decreasing=TRUE), showCategory = 3)
+
+# and a dot plot
+dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
