@@ -107,6 +107,15 @@ Run DESeq2
 # Since Dataset is a division contained in Brodmann, using Brodmann is enough
 dds <- DESeqDataSetFromMatrix(countData=counts, colData=metadata, design= ~Brodmann + Diagnosis)
 dds <- DESeq(dds)
+
+# run different DESeq2 for each brain area
+areas <- c(9, 11, 24, 46)
+areaDds <- list()
+i <- 1
+for (i in seq_along(areas)){
+  areaDds[[i]] <- DESeqDataSetFromMatrix(countData=counts[,metadata$Brodmann == areas[i]], colData=metadata[metadata$Brodmann == areas[i],], design= ~Diagnosis)
+  areaDds[[i]] <- DESeq(areaDds[[i]])
+}
 ```
 
 
@@ -124,20 +133,22 @@ resLFC.bipolar.schizo["symbol"] <- genes.symbols
 resOrdered.bipolar.schizo <- resLFC.bipolar.schizo[order(resLFC.bipolar.schizo$pvalue),]
 
 # differentiate brain areas
-areas <- c(9, 11, 24, 46)
 resLFC.areas <- list()
 resOrdered.areas <- list()
 comparisons <- list()
-i <- 1
-for (a1 in areas){
-  for (control in c("normal", "schizophrenia")){
-    comparison <- paste0("Bipolar vs ", control, " in ", a1)
+for (i in seq_along(areas)){
+  controls = c("normal", "schizophrenia")
+  if (areas[i] == 46){
+    controls = controls[1]
+  }
+  
+  for (control in controls){
+    comparison <- paste0("bipolar vs ", control, " in ", areas[i])
     print(paste0("Calculating ", comparison))
-    resLFC.areas[[i]] <- lfcShrink(dds[dds$Brodmann == a1], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
+    resLFC.areas[[i]] <- lfcShrink(areaDds[[i]], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
     resLFC.areas[[i]]["symbol"] <- genes.symbols
     resOrdered.areas[[i]] <- resLFC.areas[[i]][order(resLFC.areas[[i]]$pvalue),]
     comparisons[[i]] <- comparison
-    i <- i+1
   }
 }
 
@@ -174,9 +185,7 @@ rownames(dds) <- genes.symbols
 
 genes <- c("LINC02340", "MTND6P4", "MT1X", "IL1RL1")
 
-cutoffs <- c(50, 100, 500, 75)
-
-means_comp <-list(c("bipolar", "normal"), c("bipolar", "schizophrenia"), c("normal", "schizophrenia"))
+means_comp <- list(c("bipolar", "normal"), c("bipolar", "schizophrenia"), c("normal", "schizophrenia"))
 
 for (gene in genes) {
   gene.index <- which(genes.symbols %in% gene)
@@ -186,32 +195,39 @@ for (gene in genes) {
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
-      ggtitle(paste0("Gene Expression of ", gene, " p=", resLFC.bipolar.normal$padj[gene.index])) +
-      stat_compare_means(label.y = log10(max(plot$count)*10)) + stat_compare_means(label = "p.signif", comparisons = means_comp) +
-      scale_y_continuous(trans = log10_trans())
+      ggtitle(paste0("Gene Expression of ", gene)) +
+      scale_y_continuous(trans = log10_trans()) + 
+      stat_compare_means(label = "p.signif", comparisons = means_comp)
     )
 }
 
-areaSpecific <- data.frame(GeneName = c("CENPL", "C2orf83", "LACRT", "KRT18P11"), Brodmann = c(9, 24, 46, 46))
-cutoffs <- c(30)
+areaSpecific <- data.frame(GeneName = c("IGKC", "CHI3L2", "MT1X", "MTND6P4"), Brodmann = c(46, 46, 46, 46))
 
 for (geneIndex in 1:nrow(areaSpecific)) {
   area <- areaSpecific[geneIndex,]$Brodmann
   gene <- areaSpecific[geneIndex,]$GeneName
-  gene.index <- which(genes.symbols == gene)
-  thisDds = dds[dds$Brodmann == area]
-  plot <- plotCounts(thisDds, gene = rownames(thisDds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
+  thisDds = areaDds[[which(areas == area)]]
+  rownames(thisDds) <- genes.symbols
+  plot <- plotCounts(thisDds, gene = gene, intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
+  
+  comp = means_comp
+  if (area == 46){
+    comp = means_comp[1]
+  }
+  
   print(
     ggplot(plot, aes(x = Diagnosis, y = count, fill=Diagnosis)) + 
+      scale_fill_manual(values=c("#f8766d", "#00ba38", "#619cff")) +
       geom_violin(draw_quantiles = 0.5) + 
       geom_jitter(color="royalblue", size=0.6, alpha=0.5) + 
       theme(legend.position="none")  + 
       ggtitle(paste0("Gene Expression of ", gene, " in ", area)) + 
-      scale_y_continuous(trans = log10_trans()) +
-      stat_compare_means(label.y = log10(max(plot$count))+1.5) + stat_compare_means(label = "p.signif", comparisons = means_comp)
+      scale_y_continuous(trans = log10_trans()) + 
+      stat_compare_means(label = "p.signif", comparisons = comp)
     )
 }
 ```
+
 And Pathway analysis :)
 ```{r}
 # try subtyping and checking them here
