@@ -1,0 +1,17 @@
+IL6 JAK STAT3 SIGNALING - immune system
+INTERFERON ALPHA RESPONSE* - immune system
+INTERFERON GAMMA RESPONSE - immune system
+HYPOXIA - response to low oxygen
+INFLAMMATORY RESPONSE - immune system
+IL2 STAT5 SIGNALING - immune system
+EPITHELIAL MESENCHYMAL TRANSITION - stem cells
+TNFA SIGNALING VIA NFKB - immune system
+ESTROGEN RESPONSE LATE - ???
+APOPTOSIS - immune system
+ESTROGEN RESPONSE EARLY - ???
+P53 PATHWAY - immune system
+ADIPOGENESIS - stem cells
+COAGULATION - immune system kinda
+XENOBIOTICS METABOLISM - metabolism
+
+*known way to treat BD
