@@ -214,8 +214,6 @@ And Pathway analysis :)
 ```{r}
 # try subtyping and checking them here
 
-set.seed(86499)
-
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
 names(DE_genes_list) <- DE_genes_entrez_rank$symbol
@@ -223,7 +221,10 @@ DE_genes_list <- sort(DE_genes_list, decreasing=TRUE)
 
 hallmarks <- msigdbr(species = "Homo sapiens", category = "H") %>% dplyr::select(gs_name, gene_symbol)
 
-hm <- GSEA(DE_genes_list, TERM2GENE = hallmarks)
+# set nPerm to million so it's absolutely precise and does not change when the random seed changes
+hm <- GSEA(DE_genes_list, 
+             TERM2GENE=hallmarks, 
+             nPerm=1000000)
 
 dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
 
