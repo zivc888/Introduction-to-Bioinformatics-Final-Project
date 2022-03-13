@@ -136,6 +136,9 @@ resOrdered.bipolar.schizo <- resLFC.bipolar.schizo[order(resLFC.bipolar.schizo$p
 resLFC.areas <- list()
 resOrdered.areas <- list()
 comparisons <- list()
+
+j <- 1
+
 for (i in seq_along(areas)){
   controls = c("normal", "schizophrenia")
   if (areas[i] == 46){
@@ -144,11 +147,12 @@ for (i in seq_along(areas)){
   
   for (control in controls){
     comparison <- paste0("bipolar vs ", control, " in ", areas[i])
-    print(paste0("Calculating ", comparison))
-    resLFC.areas[[i]] <- lfcShrink(areaDds[[i]], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
-    resLFC.areas[[i]]["symbol"] <- genes.symbols
-    resOrdered.areas[[i]] <- resLFC.areas[[i]][order(resLFC.areas[[i]]$pvalue),]
-    comparisons[[i]] <- comparison
+    # print(paste0("Calculating ", comparison))
+    # resLFC.areas[[j]] <- lfcShrink(areaDds[[i]], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
+    # resLFC.areas[[j]]["symbol"] <- genes.symbols
+    resOrdered.areas[[j]] <- resLFC.areas[[j]][order(resLFC.areas[[j]]$pvalue),]
+    comparisons[[j]] <- comparison
+    j = j + 1
   }
 }
 
@@ -197,7 +201,7 @@ for (gene in genes) {
       theme(legend.position="none")  + 
       ggtitle(paste0("Gene Expression of ", gene)) +
       scale_y_continuous(trans = log10_trans()) + 
-      stat_compare_means(label = "p.signif", comparisons = means_comp)
+      stat_compare_means(label = "p.signif", comparisons = means_comp,  method = "wilcox.test")
     )
 }
 
@@ -223,7 +227,7 @@ for (geneIndex in 1:nrow(areaSpecific)) {
       theme(legend.position="none")  + 
       ggtitle(paste0("Gene Expression of ", gene, " in ", area)) + 
       scale_y_continuous(trans = log10_trans()) + 
-      stat_compare_means(label = "p.signif", comparisons = comp)
+      stat_compare_means(label = "p.signif", comparisons = comp, method = "wilcox.test")
     )
 }
 ```
@@ -252,7 +256,7 @@ dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bip
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
-Clustering (not checked yet)
+Clustering (not checked yet)1
 ```{r}
 normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
 colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
