@@ -102,6 +102,8 @@ counts <- counts[sort(colnames(counts))]
 genes.symbols <- data1[,2]
 # if there is no gene name, use the ID
 genes.symbols[genes.symbols == ""] <- data1$Gene.ID[genes.symbols == ""]
+# replace dupliactes with ID too
+genes.symbols[duplicated(genes.symbols)] <- data1$Gene.ID[duplicated(genes.symbols)]
 ```
 
 
@@ -281,7 +283,7 @@ plot(hclust_avg, cex = 0.6, hang = -1)
 rect.hclust(hclust_avg, k = 3, border = 2:8)
 ```
 
-Heatmap cause we can :(
+Heatmap cause we can
 ```{r}
 # take normalized counts for normal and bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
@@ -312,7 +314,31 @@ pheatmap(normcounts[selected,], cluster_rows=TRUE,
          annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
 ```
 
-Run some xCell
+Run some random forest ( not working unfortunately :( )
 ```{r}
+library(randomForest)
+library(treeshap)
+library(MLSeq)
 
+
+data <- counts[,metadata$Diagnosis == "bipolar"]
+rownames(data) <- genes.symbols
+data <- data[selectedGenes,]
+forestMetadata <- metadata[metadata$Dataset == "bipolar",]
+
+class <- data.frame(condition = factor(rep(c("N","T"), c(31, 30))))
+n <- ncol(data) # number of samples
+p <- nrow(data) # number of features
+# number of samples for test set (30% test, 70% train).
+nTest <- ceiling(n*0.3)
+ind <- sample(n, nTest, FALSE)
+
+data.train <- data[ ,-ind]
+data.train <- as.matrix(data.train + 1)
+classtr <- data.frame(condition = class[-ind, ])
+
+data.trainS4 <- DESeqDataSetFromMatrix(countData = data.train, colData = classtr, formula(~ 1))
+
+rf <- classify(data = data.trainS4, method = "rf", preProcessing = "deseq-vst", ref = "T", control = trainControl(method = "repeatedcv", number = 5, repeats = 2, classProbs = TRUE))
+rf
 ```
