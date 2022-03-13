@@ -16,6 +16,9 @@ library(scales)
 library(ggpubr)
 library(ggplot2)
 library(enrichplot)
+library(factoextra)
+library(pheatmap)
+library(org.Hs.eg.db)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -97,6 +100,8 @@ counts <- counts[sort(colnames(counts))]
 
 # take the gene names from the counts data
 genes.symbols <- data1[,2]
+# if there is no gene name, use the ID
+genes.symbols[genes.symbols == ""] <- data1$Gene.ID[genes.symbols == ""]
 ```
 
 
@@ -147,9 +152,9 @@ for (i in seq_along(areas)){
   
   for (control in controls){
     comparison <- paste0("bipolar vs ", control, " in ", areas[i])
-    # print(paste0("Calculating ", comparison))
-    # resLFC.areas[[j]] <- lfcShrink(areaDds[[i]], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
-    # resLFC.areas[[j]]["symbol"] <- genes.symbols
+    print(paste0("Calculating ", comparison))
+    resLFC.areas[[j]] <- lfcShrink(areaDds[[i]], contrast = c("Diagnosis", "bipolar", control), type = "ashr")
+    resLFC.areas[[j]]["symbol"] <- genes.symbols
     resOrdered.areas[[j]] <- resLFC.areas[[j]][order(resLFC.areas[[j]]$pvalue),]
     comparisons[[j]] <- comparison
     j = j + 1
@@ -234,8 +239,6 @@ for (geneIndex in 1:nrow(areaSpecific)) {
 
 And Pathway analysis :)
 ```{r}
-# try subtyping and checking them here
-
 # remove NAs and create sorted genes list with LFC values and ENSMBLE ID as names
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
@@ -256,25 +259,31 @@ dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bip
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
-Clustering (not checked yet)1
+Clustering (not checked yet)
 ```{r}
+# get normalized counts only for bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
 colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
 var_per_gene <- apply(normcounts, 1, var)
-selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:29])
+
+# take 1000 most significant genes
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
 normcounts.top1Kvar <- t(normcounts[selectedGenes,])
+
+# make an elbow plot (optimal k seems to be 2 or 3)
+fviz_nbclust(normcounts.top1Kvar, FUN = hcut, method = "wss")
+
 dist_mat <- dist(normcounts.top1Kvar, method = 'euclidean')
 
+# plot the cluster dendrogram
 hclust_avg <- hclust(dist_mat, method = 'average')
 plot(hclust_avg, cex = 0.6, hang = -1)
-rect.hclust(hclust_avg, k = 2, border = 2:8)
+rect.hclust(hclust_avg, k = 3, border = 2:8)
 ```
 
 Heatmap cause we can :(
 ```{r}
-library(pheatmap)
-library(org.Hs.eg.db)
-
+# take normalized counts for normal and bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
 
 dds.symbol <- dds
@@ -297,8 +306,13 @@ selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2Fol
 
 selected <- c(selectUp,selectDown)
 
+# create the heatmap
 pheatmap(normcounts[selected,], cluster_rows=TRUE,
          show_colnames = FALSE, cluster_cols=TRUE, 
          annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
 ```
 
+Run some xCell
+```{r}
+
+```
