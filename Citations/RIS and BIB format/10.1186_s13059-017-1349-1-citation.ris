@@ -1,0 +1,17 @@
+TY  - JOUR
+AU  - Aran, Dvir
+AU  - Hu, Zicheng
+AU  - Butte, Atul J.
+PY  - 2017
+DA  - 2017/11/15
+TI  - xCell: digitally portraying the tissue cellular heterogeneity landscape
+JO  - Genome Biology
+SP  - 220
+VL  - 18
+IS  - 1
+AB  - Tissues are complex milieus consisting of numerous cell types. Several recent methods have attempted to enumerate cell subsets from transcriptomes. However, the available methods have used limited sources for training and give only a partial portrayal of the full cellular landscape. Here we present xCell, a novel gene signature-based method, and use it to infer 64 immune and stromal cell types. We harmonized 1822 pure human cell type transcriptomes from various sources and employed a curve fitting approach for linear comparison of cell types and introduced a novel spillover compensation technique for separating them. Using extensive in silico analyses and comparison to cytometry immunophenotyping, we show that xCell outperforms other methods. xCell is available at http://xCell.ucsf.edu/.
+SN  - 1474-760X
+UR  - https://doi.org/10.1186/s13059-017-1349-1
+DO  - 10.1186/s13059-017-1349-1
+ID  - Aran2017
+ER  - 
