@@ -1,11 +1,14 @@
 ---
 title: "Introduction to Bioinformatics"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Setup
 
 load libraries and define functions
+
 ```{r setup}
 library(DESeq2) 
 library(limma)
@@ -22,9 +25,6 @@ library(factoextra)
 library(pheatmap)
 library(org.Hs.eg.db)
 library(xCell)
-library(randomForest)
-library(treeshap)
-library(MLSeq)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -46,6 +46,7 @@ read_design <- function(filename) {
 ```
 
 Load Data
+
 ```{r data-loading}
 # read the experiments' designs
 E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
@@ -81,6 +82,7 @@ genes.symbols[duplicated(genes.symbols)] <- data1$Gene.ID[duplicated(genes.symbo
 # Identifying Biomarker Genes
 
 Run DESeq2
+
 ```{r DESeq}
 # run DESeq2 on combined data from both experiments
 # using Dataset to distinguish between them which will remove the batch effect. 
@@ -98,8 +100,8 @@ for (i in seq_along(areas)){
 }
 ```
 
-
 Analyze the data:
+
 ```{r DESeq-analysis}
 # do logfold change for Diagnosis
 # normal vs bipolar
@@ -147,8 +149,8 @@ mat <- removeBatchEffect(mat, dds.norm$Dataset)
 assay(dds.norm) <- mat
 ```
 
-
 Make some nice looking graphs :)
+
 ```{r volcano-and-pca-plots}
 # create a volcano plot
 EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs normal")
@@ -164,6 +166,7 @@ plotPCA(dds.norm, intgroup=c("Diagnosis", "Brodmann"))
 ```
 
 Some count plots for significant genes :)
+
 ```{r count-plots}
 rownames(dds) <- genes.symbols
 
@@ -215,6 +218,7 @@ for (geneIndex in 1:nrow(areaSpecific)) {
 # Identifying Enriched Pathways
 
 And Pathway analysis :)
+
 ```{r pathway-analysis}
 # remove NAs and create sorted genes list with LFC values and ENSMBLE ID as names
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
@@ -238,6 +242,7 @@ dotplot(hm, showCategory = 178, title="Pathway Analisys with GSEA, normal VS bip
 ```
 
 Clustering (not checked yet)
+
 ```{r clustering}
 # get normalized counts only for bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
@@ -260,6 +265,7 @@ rect.hclust(hclust_avg, k = 3, border = 2:8)
 ```
 
 Heatmap cause we can
+
 ```{r heatmap}
 # take normalized counts for normal and bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
@@ -292,10 +298,56 @@ pheatmap(normcounts[selected,], cluster_rows=TRUE,
 
 # Examining the Changes in the Cellular Composition
 
-xCell
-```{r xCell}
+## xCell
+
+```{r run-xCell}
 rownames(counts) <- genes.symbols
 
-counts.xCell <- xCellAnalysis(counts)
+counts.xCell <- xCellAnalysis(counts[,metadata$Diagnosis == "bipolar"])
 
+p <- pheatmap(counts.xCell, show_colnames = F)
+
+counts.xCell.filtered <- counts.xCell[rowMeans(counts.xCell) > 0.01,]
+counts.xCell.filtered.scaled <- t(scale(t(counts.xCell.filtered)))
+counts.xCell.filtered.scaled[counts.xCell.filtered.scaled>1] <- 1
+counts.xCell.filtered.scaled[counts.xCell.filtered.scaled< -1] <- -1
+```
+
+```{r show results}
+pheatmap(counts.xCell.filtered.scaled, show_colnames = F)
+
+k = 2
+myclusters <- cutree(p$tree_col, k=k)
+
+library(janitor)
+tabyl(metadata[myclusters == 2,], Diagnosis)
+
+comps <- t(combn(1:k, 2))
+comps <- split(comps, seq(nrow(comps)))
+
+for (cellType in rownames(counts.xCell.filtered)) {
+  MEscore.df <- data.frame("score" = counts.xCell[cellType,],
+                         "cluster" = factor(myclusters),
+                         row.names = names(myclusters))
+  
+  print(
+    ggplot(MEscore.df, aes(x=cluster, y=score, fill=cluster)) +
+    geom_violin(draw_quantiles = 0.5) +
+    labs(x="", y="Score") + stat_compare_means(method = "wilcox.test", comparisons = comps, label = "p.signif") +
+      ggtitle(paste0("Cluster comparison of ", cellType))
+  )
+}
+
+chosenCells = c("Th1 cells", "Smooth muscle", "MSC")
+scores.df <- data.frame("cluster" = factor(myclusters),
+                         row.names = names(myclusters))
+for (i in seq_along(chosenCells)) {
+  scores.df[[paste0("score", i)]] <- counts.xCell[chosenCells[i],]
+}
+
+library(plotly)
+
+ggplot(scores.df, aes(x=score1, y=score2, color=cluster)) + geom_point()
+
+plot_ly(x=scores.df$score1, y=scores.df$score2, z=scores.df$score3, mode="markers", color=scores.df$cluster)
 ```
