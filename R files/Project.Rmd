@@ -3,8 +3,10 @@ title: "Introduction to Bioinformatics"
 output: html_document
 ---
 
+# Setup
+
 load libraries and define functions
-```{r}
+```{r setup}
 library(DESeq2) 
 library(limma)
 library(EnhancedVolcano)
@@ -19,6 +21,10 @@ library(enrichplot)
 library(factoextra)
 library(pheatmap)
 library(org.Hs.eg.db)
+library(xCell)
+library(randomForest)
+library(treeshap)
+library(MLSeq)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -39,44 +45,8 @@ read_design <- function(filename) {
 
 ```
 
-Not Used
-```{}
-# for unused data
-read_processed_data <- function(filename){
-  data <- read.delim(filename, sep="\t")
-  data <- cbind(data[,1], data)
-  data <- data[-1,]
-
-  filtering <- select(hgu133a.db,keys= data$Scan.REF, columns=c("PROBEID", "ENSEMBL", "SYMBOL"))
-
-  filtering <- filtering[!duplicated(filtering$ENSEMBL),]
-  filtering <- filtering[!duplicated(filtering$PROBEID),]
-  filtering <- filtering[!is.na(filtering$ENSEMBL),]
-
-  data <- data[data$Scan.REF %in% filtering$PROBEID,]
-  data[1:2] <- filtering[2:3]
-  colnames(data)[1:2] <- c("Gene.ID", "Gene Name")
-  
-  return(data)
-}
-
-data3 <- read_processed_data("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-processed-data-1435128605.txt")
-
-rownames(data3) <- data3[,1]
-
-metadata <- read.delim("../Databases/Bipolar - E-GEOD-5388/E-GEOD-5388-experiment-design.tsv")[1:3][-2]
-
-colnames(metadata) <- c("Speciman", "Diagnosis")
-
-rownames(metadata) <- metadata[,1]
-metadata <- metadata[-1]
-
-counts <- data3
-counts <- counts[-1][-1]
-```
-
 Load Data
-```{r}
+```{r data-loading}
 # read the experiments' designs
 E7 <- read_design("../Databases/Bipolar - E-GEOD-78936/E-GEOD-78936-experiment-design.tsv")
 E5 <- read_design("../Databases/Bipolar - E-GEOD-53239/E-GEOD-53239-experiment-design.tsv")
@@ -100,15 +70,18 @@ counts <- counts[sort(colnames(counts))]
 
 # take the gene names from the counts data
 genes.symbols <- data1[,2]
+
 # if there is no gene name, use the ID
 genes.symbols[genes.symbols == ""] <- data1$Gene.ID[genes.symbols == ""]
+
 # replace dupliactes with ID too
 genes.symbols[duplicated(genes.symbols)] <- data1$Gene.ID[duplicated(genes.symbols)]
 ```
 
+# Identifying Biomarker Genes
 
 Run DESeq2
-```{r}
+```{r DESeq}
 # run DESeq2 on combined data from both experiments
 # using Dataset to distinguish between them which will remove the batch effect. 
 # Since Dataset is a division contained in Brodmann, using Brodmann is enough
@@ -127,7 +100,7 @@ for (i in seq_along(areas)){
 
 
 Analyze the data:
-```{r}
+```{r DESeq-analysis}
 # do logfold change for Diagnosis
 # normal vs bipolar
 resLFC.bipolar.normal <- lfcShrink(dds, contrast = c("Diagnosis", "bipolar", "normal"), type = "ashr")
@@ -176,7 +149,7 @@ assay(dds.norm) <- mat
 
 
 Make some nice looking graphs :)
-```{r}
+```{r volcano-and-pca-plots}
 # create a volcano plot
 EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs normal")
 EnhancedVolcano(resOrdered.bipolar.schizo, lab = resOrdered.bipolar.schizo$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs schizophrenia")
@@ -191,7 +164,7 @@ plotPCA(dds.norm, intgroup=c("Diagnosis", "Brodmann"))
 ```
 
 Some count plots for significant genes :)
-```{r}
+```{r count-plots}
 rownames(dds) <- genes.symbols
 
 genes <- c("LINC02340", "MTND6P4", "MT1X", "IL1RL1")
@@ -239,8 +212,10 @@ for (geneIndex in 1:nrow(areaSpecific)) {
 }
 ```
 
+# Identifying Enriched Pathways
+
 And Pathway analysis :)
-```{r}
+```{r pathway-analysis}
 # remove NAs and create sorted genes list with LFC values and ENSMBLE ID as names
 DE_genes_entrez_rank <- resOrdered.bipolar.normal[!is.na(resOrdered.bipolar.normal$padj),]
 DE_genes_list <- DE_genes_entrez_rank$log2FoldChange
@@ -257,12 +232,13 @@ hm <- GSEA(DE_genes_list, TERM2GENE=hallmarks, nPerm=1000000)
 ridgeplot(hm) + labs(x = "enrichment distribution")
 
 # and a dot plot
-dotplot(hm, showCategory = Inf, title="Pathway Analisys with GSEA, normal VS bipolar")
+dotplot(hm, showCategory = 178, title="Pathway Analisys with GSEA, normal VS bipolar")
 
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
+
 Clustering (not checked yet)
-```{r}
+```{r clustering}
 # get normalized counts only for bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
 colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
@@ -284,7 +260,7 @@ rect.hclust(hclust_avg, k = 3, border = 2:8)
 ```
 
 Heatmap cause we can
-```{r}
+```{r heatmap}
 # take normalized counts for normal and bipolar
 normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
 
@@ -314,31 +290,12 @@ pheatmap(normcounts[selected,], cluster_rows=TRUE,
          annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
 ```
 
-Run some random forest ( not working unfortunately :( )
-```{r}
-library(randomForest)
-library(treeshap)
-library(MLSeq)
+# Examining the Changes in the Cellular Composition
 
+xCell
+```{r xCell}
+rownames(counts) <- genes.symbols
 
-data <- counts[,metadata$Diagnosis == "bipolar"]
-rownames(data) <- genes.symbols
-data <- data[selectedGenes,]
-forestMetadata <- metadata[metadata$Dataset == "bipolar",]
+counts.xCell <- xCellAnalysis(counts)
 
-class <- data.frame(condition = factor(rep(c("N","T"), c(31, 30))))
-n <- ncol(data) # number of samples
-p <- nrow(data) # number of features
-# number of samples for test set (30% test, 70% train).
-nTest <- ceiling(n*0.3)
-ind <- sample(n, nTest, FALSE)
-
-data.train <- data[ ,-ind]
-data.train <- as.matrix(data.train + 1)
-classtr <- data.frame(condition = class[-ind, ])
-
-data.trainS4 <- DESeqDataSetFromMatrix(countData = data.train, colData = classtr, formula(~ 1))
-
-rf <- classify(data = data.trainS4, method = "rf", preProcessing = "deseq-vst", ref = "T", control = trainControl(method = "repeatedcv", number = 5, repeats = 2, classProbs = TRUE))
-rf
 ```
