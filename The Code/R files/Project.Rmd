@@ -87,10 +87,12 @@ Run DESeq2
 dds <- DESeqDataSetFromMatrix(countData=counts, colData=metadata, design= ~Brodmann + Diagnosis)
 dds <- DESeq(dds)
 
+rownames(dds) <- genes.symbols
+
 # run different DESeq2 for each brain area
 areas <- c(9, 11, 24, 46)
 areaDds <- list()
-i <- 1
+
 for (i in seq_along(areas)){
   areaDds[[i]] <- DESeqDataSetFromMatrix(countData=counts[,metadata$Brodmann == areas[i]], colData=metadata[metadata$Brodmann == areas[i],], design= ~Diagnosis)
   areaDds[[i]] <- DESeq(areaDds[[i]])
@@ -121,6 +123,7 @@ j <- 1
 for (i in seq_along(areas)){
   controls = c("normal", "schizophrenia")
   if (areas[i] == 46){
+    # area 46 has no SZ patients
     controls = controls[1]
   }
   
@@ -149,7 +152,7 @@ assay(dds.norm) <- mat
 
 Make some nice looking graphs :)
 ```{r volcano-and-pca-plots}
-# create a volcano plot
+# create volcano plots
 EnhancedVolcano(resOrdered.bipolar.normal, lab = resOrdered.bipolar.normal$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs normal")
 EnhancedVolcano(resOrdered.bipolar.schizo, lab = resOrdered.bipolar.schizo$symbol, x = 'log2FoldChange', y = 'padj', FCcutoff=2, pCutoff = 10e-10, title="bipolar vs schizophrenia")
 for (i in seq_along(comparisons)){
@@ -164,12 +167,13 @@ plotPCA(dds.norm, intgroup=c("Diagnosis", "Brodmann"))
 
 Some count plots for significant genes :)
 ```{r count-plots}
-rownames(dds) <- genes.symbols
-
+# significant genes to check in violin plots
 genes <- c("LINC02340", "MTND6P4", "MT1X", "IL1RL1")
 
+# compare the means of each two groups
 means_comp <- list(c("bipolar", "normal"), c("bipolar", "schizophrenia"), c("normal", "schizophrenia"))
 
+# make the violin plots
 for (gene in genes) {
   gene.index <- which(genes.symbols %in% gene)
   plot <- plotCounts(dds, gene = rownames(dds)[gene.index], intgroup = c('Diagnosis'), xlab="Diagnosis", title=paste0(gene, " counts"), returnData = T)
@@ -184,8 +188,10 @@ for (gene in genes) {
     )
 }
 
+# significant genes in single areas to check in violin plots
 areaSpecific <- data.frame(GeneName = c("IGKC", "CHI3L2", "MT1X", "MTND6P4"), Brodmann = c(46, 46, 46, 46))
 
+# make the violin plots
 for (geneIndex in 1:nrow(areaSpecific)) {
   area <- areaSpecific[geneIndex,]$Brodmann
   gene <- areaSpecific[geneIndex,]$GeneName
@@ -195,6 +201,7 @@ for (geneIndex in 1:nrow(areaSpecific)) {
   
   comp = means_comp
   if (area == 46){
+    # area 46 has no SZ patients
     comp = means_comp[1]
   }
   
@@ -236,50 +243,46 @@ dotplot(hm, showCategory = 178, title="Pathway Analisys with GSEA, normal VS bip
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
 
-Clustering (not checked yet)
+Clustering, no interesting data
 ```{r clustering}
 # get normalized counts only for bipolar
-normcounts <- assay(vst(dds[,dds$Diagnosis == "bipolar"], blind=T))
-colnames(normcounts) <- paste0("bipolar", seq(1, ncol(normcounts)))
+sampleFilter <- dds$Diagnosis != "schizophrenia"
+normcounts <- assay(vst(dds[,sampleFilter], blind=T))
+colnames(normcounts) <- paste0(dds$Diagnosis[sampleFilter], seq(1, ncol(normcounts)))
 var_per_gene <- apply(normcounts, 1, var)
 
 # take 1000 most significant genes
-selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
-normcounts.top1Kvar <- t(normcounts[selectedGenes,])
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:20])
+selectedGenes <- genes
+
+normcounts.topGenes <- t(normcounts[selectedGenes,])
 
 # make an elbow plot (optimal k seems to be 2 or 3)
-fviz_nbclust(normcounts.top1Kvar, FUN = hcut, method = "wss")
+fviz_nbclust(normcounts.topGenes, FUN = hcut, method = "wss")
 
-dist_mat <- dist(normcounts.top1Kvar, method = 'euclidean')
+dist_mat <- dist(normcounts.topGenes, method = 'euclidean')
 
 # plot the cluster dendrogram
 hclust_avg <- hclust(dist_mat, method = 'average')
-plot(hclust_avg, cex = 0.6, hang = -1)
+plot(hclust_avg, cex = 0.6, hang = -1, xlab="", ylab ="", sub="", axes=F)
 rect.hclust(hclust_avg, k = 3, border = 2:8)
 ```
 
-Heatmap cause we can
+Heatmap
 ```{r heatmap}
 # take normalized counts for normal and bipolar
-normcounts <- assay(vst(dds[,dds$Diagnosis != "schizophrenia"], blind=T))
+sampleFilter <- dds$Diagnosis != "schizophrenia"
+normcounts <- assay(vst(dds[,sampleFilter], blind=T))
 
-dds.symbol <- dds
-rownames(dds.symbol) <- mapIds(org.Hs.eg.db,
-                              keys=data1$Gene.ID,
-                              column="SYMBOL",
-                              keytype="ENSEMBL",
-                              multiVals="first")
-
-rownames(dds.symbol)[is.na(rownames(dds.symbol))] <- rownames(dds)[is.na(rownames(dds.symbol))]
-rownames(dds.symbol) <- make.unique(rownames(dds.symbol))
-
-df <- data.frame(row.names = colnames(dds.symbol),
-                 diagnosis = colData(dds.symbol)$Diagnosis)
+# create labels for heatmap
+df <- data.frame(row.names = colnames(dds[,sampleFilter]),
+                 diagnosis = colData(dds[,sampleFilter])$Diagnosis,
+                  area = colData(dds[,sampleFilter])$Brodmann)
 
 # Take top 10 genes with the lowest p-value that express in Bipolar (log2FoldChange>0)
-selectUp <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange>0][1:20]
+selectUp <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange>0][1:10]
 # Take top 10 genes with the lowest p-value that express in Healthy (log2FoldChange<0)
-selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange<0][1:20]
+selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange<0][1:10]
 
 selected <- c(selectUp,selectDown)
 
@@ -291,34 +294,54 @@ pheatmap(normcounts[selected,], cluster_rows=TRUE,
 
 # Examining the Changes in the Cellular Composition
 
-## xCell
-
 ```{r run-xCell}
+# set rownames of counts so xCell understands what are the genes
 rownames(counts) <- genes.symbols
 
-counts.xCell <- xCellAnalysis(counts)
+# run the analysis
+counts.xCell <- xCellAnalysis(counts, rnaseq=T)
 
-p <- pheatmap(counts.xCell, show_colnames = F)
+p <- pheatmap(counts.xCell, show_colnames = F, silent = T)
 
+# filter results as most of it is not valuble information
 counts.xCell.filtered <- counts.xCell[rowMeans(counts.xCell) > 0.01,]
+
+# scale for heatmap, avarage should be 0
 counts.xCell.filtered.scaled <- t(scale(t(counts.xCell.filtered)))
-counts.xCell.filtered.scaled[counts.xCell.filtered.scaled>1] <- 1
-counts.xCell.filtered.scaled[counts.xCell.filtered.scaled< -1] <- -1
+
+# clip values
+counts.xCell.filtered.scaled.clipped <- counts.xCell.filtered.scaled
+counts.xCell.filtered.scaled.clipped[counts.xCell.filtered.scaled > 1] <- 1
+counts.xCell.filtered.scaled.clipped[counts.xCell.filtered.scaled < -1] <- -1
 ```
 
 ```{r show results}
-pheatmap(counts.xCell.filtered.scaled, show_colnames = F)
+# clustering metadata for heatmap
+df <- data.frame(row.names = colnames(dds),
+                 diagnosis = colData(dds)$Diagnosis,
+                 area = colData(dds)$Brodmann)
 
+# show results
+pheatmap(counts.xCell.filtered.scaled.clipped, cluster_rows=TRUE,
+         show_colnames = FALSE, cluster_cols=TRUE, 
+         annotation_col=df, scale = 'row', cutree_cols = 4, cutree_rows = 2)
+
+# analyze clustering
 k = 2
 myclusters <- cutree(p$tree_col, k=k)
 
-tabyl(metadata[myclusters == 1,], Brodmann)
-tabyl(metadata[myclusters == 2,], Brodmann)
+# show correlation between clusters and known factors about the patients
+patients <- table(metadata$Diagnosis, myclusters)
+mosaicplot(patients)
 
+patients <- table(metadata$Brodmann, myclusters)
+mosaicplot(patients)
 
+# create every combination of clusters to see difference in the data
 comps <- t(combn(1:k, 2))
 comps <- split(comps, seq(nrow(comps)))
 
+# violin plots of cell score in every cluster
 for (cellType in rownames(counts.xCell.filtered)) {
   MEscore.df <- data.frame("score" = counts.xCell[cellType,],
                          "cluster" = factor(myclusters),
@@ -332,17 +355,31 @@ for (cellType in rownames(counts.xCell.filtered)) {
   )
 }
 
+# see how the cell type divide the groups on a plot
 chosenCells = c("Th1 cells", "Smooth muscle", "MSC")
 scores.df <- data.frame("cluster" = factor(myclusters),
                          row.names = names(myclusters),
                         area=paste0(metadata$Brodmann, ":", factor(myclusters)))
 
-for (i in seq_along(chosenCells)) {
-  scores.df[[paste0("score", i)]] <- counts.xCell[chosenCells[i],]
+# create a 
+for (cell in chosenCells) {
+  scores.df[cell] <- counts.xCell[cell,]
 }
 
-ggplot(scores.df, aes(x=score1, y=score2, color=area)) + geom_point()
+# create a list of every two cell type combination from choseCells
+comps <- t(combn(1:length(chosenCells), 2))
+comps <- split(comps, seq(nrow(comps)))
 
-plot_ly(x=scores.df$score1, y=scores.df$score2, z=scores.df$score3, mode="markers", color=scores.df$cluster)
+# see how well each two cell types divide the patients to the clusters
+for (comp in comps){
+  print(
+    ggplot(scores.df, aes(x=scores.df[,chosenCells[comp[1]]], y=scores.df[,chosenCells[comp[2]]], color=cluster)) + 
+      geom_point() + 
+      xlab(chosenCells[comp[1]]) + 
+      ylab(chosenCells[comp[2]])
+  )
+}
 ```
+
+Overall, we can see that the division is quite good, and that there is some kind of difference between the clusters, but nothing that is expressed in other mediacal data we have
 
