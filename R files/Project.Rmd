@@ -22,6 +22,8 @@ library(factoextra)
 library(pheatmap)
 library(org.Hs.eg.db)
 library(xCell)
+library(janitor)
+library(plotly)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -294,7 +296,7 @@ pheatmap(normcounts[selected,], cluster_rows=TRUE,
 ```{r run-xCell}
 rownames(counts) <- genes.symbols
 
-counts.xCell <- xCellAnalysis(counts[,metadata$Diagnosis == "bipolar"])
+counts.xCell <- xCellAnalysis(counts)
 
 p <- pheatmap(counts.xCell, show_colnames = F)
 
@@ -310,8 +312,9 @@ pheatmap(counts.xCell.filtered.scaled, show_colnames = F)
 k = 2
 myclusters <- cutree(p$tree_col, k=k)
 
-library(janitor)
-tabyl(metadata[myclusters == 2,], Diagnosis)
+tabyl(metadata[myclusters == 1,], Brodmann)
+tabyl(metadata[myclusters == 2,], Brodmann)
+
 
 comps <- t(combn(1:k, 2))
 comps <- split(comps, seq(nrow(comps)))
@@ -331,14 +334,14 @@ for (cellType in rownames(counts.xCell.filtered)) {
 
 chosenCells = c("Th1 cells", "Smooth muscle", "MSC")
 scores.df <- data.frame("cluster" = factor(myclusters),
-                         row.names = names(myclusters))
+                         row.names = names(myclusters),
+                        area=paste0(metadata$Brodmann, ":", factor(myclusters)))
+
 for (i in seq_along(chosenCells)) {
   scores.df[[paste0("score", i)]] <- counts.xCell[chosenCells[i],]
 }
 
-library(plotly)
-
-ggplot(scores.df, aes(x=score1, y=score2, color=cluster)) + geom_point()
+ggplot(scores.df, aes(x=score1, y=score2, color=area)) + geom_point()
 
 plot_ly(x=scores.df$score1, y=scores.df$score2, z=scores.df$score3, mode="markers", color=scores.df$cluster)
 ```
