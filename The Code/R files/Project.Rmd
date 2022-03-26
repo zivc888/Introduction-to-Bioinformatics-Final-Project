@@ -21,6 +21,7 @@ library(enrichplot)
 library(factoextra)
 library(pheatmap)
 library(xCell)
+library(dendextend)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -240,70 +241,6 @@ dotplot(hm, showCategory = 178, title="Pathway Analisys with GSEA, normal VS bip
 # We tried running the same code on resOrdered.bipolar.schizo, but it found no enriched terms
 ```
 
-Clustering, no interesting data
-```{r clustering}
-# get normalized counts only for bipolar
-sampleFilter <- dds$Diagnosis != "schizophrenia"
-normcounts <- assay(vst(dds[,sampleFilter], blind=T))
-colnames(normcounts) <- paste0(dds$Diagnosis[sampleFilter], "_", seq(1, ncol(normcounts)))
-var_per_gene <- apply(normcounts, 1, var)
-
-# take 1000 most significant genes
-selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
-selectedGenes <- genes
-
-normcounts.topGenes <- t(normcounts[selectedGenes,])
-
-# make an elbow plot (optimal k seems to be 2 or 3)
-fviz_nbclust(normcounts.topGenes, FUN = hcut, method = "wss")
-
-dist_mat <- dist(normcounts.topGenes, method = 'euclidean')
-
-library(dendextend)
-
-# plot the cluster dendrogram
-hclust_avg <- dist_mat %>% hclust(method = 'average') %>% as.dendrogram
-
-# set colors
-colorlist <- labels(hclust_avg)
-colorlist <- sub("normal.*", "#00ba38", colorlist)
-colorlist <- sub("bipolar.*", "#f8766d", colorlist)
-colorlist <- sub("schizophrenia.*", "#619cff", colorlist)
-
-hclust_avg <- hclust_avg %>% 
-  set("leaves_pch", 19) %>%
-  set("leaves_cex", 1) %>%
-  set("leaves_col", colorlist) %>%
-  set("labels", "")
-
-plot(hclust_avg, ex = 0.6, hang = -1, xlab="", ylab ="", sub="", axes=F)
-rect.dendrogram(hclust_avg, k = 3, border = 2:8)
-```
-
-Heatmap
-```{r heatmap}
-# take normalized counts for normal and bipolar
-sampleFilter <- dds$Diagnosis != "schizophrenia"
-normcounts <- assay(vst(dds[,sampleFilter], blind=T))
-
-# create labels for heatmap
-df <- data.frame(row.names = colnames(dds[,sampleFilter]),
-                 diagnosis = colData(dds[,sampleFilter])$Diagnosis,
-                  area = colData(dds[,sampleFilter])$Brodmann)
-
-# Take top 10 genes with the lowest p-value that express in Bipolar (log2FoldChange>0)
-selectUp <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange>0][1:10]
-# Take top 10 genes with the lowest p-value that express in Healthy (log2FoldChange<0)
-selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange<0][1:10]
-
-selected <- c(selectUp,selectDown)
-
-# create the heatmap
-pheatmap(normcounts[selected,], cluster_rows=TRUE,
-         show_colnames = FALSE, cluster_cols=TRUE, 
-         annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
-```
-
 # Examining the Changes in the Cellular Composition
 
 ```{r run-xCell}
@@ -393,5 +330,68 @@ for (comp in comps){
 }
 ```
 
-Overall, we can see that the division is quite good, and that there is some kind of difference between the clusters, but nothing that is expressed in other mediacal data we have
+Overall, we can see that the division is quite good, and that there is some kind of difference between the clusters, but nothing that is expressed in other medical data we have
 
+# Classifying Patients
+
+Clustering
+```{r clustering}
+# get normalized counts only for bipolar
+sampleFilter <- dds$Diagnosis != "schizophrenia"
+normcounts <- assay(vst(dds[,sampleFilter], blind=T))
+colnames(normcounts) <- paste0(dds$Diagnosis[sampleFilter], "_", seq(1, ncol(normcounts)))
+var_per_gene <- apply(normcounts, 1, var)
+
+# take 1000 most significant genes
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
+selectedGenes <- genes
+
+normcounts.topGenes <- t(normcounts[selectedGenes,])
+
+# make an elbow plot (optimal k seems to be 2 or 3)
+fviz_nbclust(normcounts.topGenes, FUN = hcut, method = "wss")
+
+dist_mat <- dist(normcounts.topGenes, method = 'euclidean')
+
+# plot the cluster dendrogram
+hclust_avg <- dist_mat %>% hclust(method = 'average') %>% as.dendrogram
+
+# set colors
+colorlist <- labels(hclust_avg)
+colorlist <- sub("normal.*", "#00ba38", colorlist)
+colorlist <- sub("bipolar.*", "#f8766d", colorlist)
+colorlist <- sub("schizophrenia.*", "#619cff", colorlist)
+
+hclust_avg <- hclust_avg %>% 
+  set("leaves_pch", 19) %>%
+  set("leaves_cex", 1) %>%
+  set("leaves_col", colorlist) %>%
+  set("labels", "")
+
+plot(hclust_avg, ex = 0.6, hang = -1, xlab="", ylab ="", sub="", axes=F)
+rect.dendrogram(hclust_avg, k = 3, border = 2:8)
+```
+
+Heatmap
+```{r heatmap}
+# take normalized counts for normal and bipolar
+sampleFilter <- dds$Diagnosis != "schizophrenia"
+normcounts <- assay(vst(dds[,sampleFilter], blind=T))
+
+# create labels for heatmap
+df <- data.frame(row.names = colnames(dds[,sampleFilter]),
+                 diagnosis = colData(dds[,sampleFilter])$Diagnosis,
+                  area = colData(dds[,sampleFilter])$Brodmann)
+
+# Take top 10 genes with the lowest p-value that express in Bipolar (log2FoldChange>0)
+selectUp <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange>0][1:10]
+# Take top 10 genes with the lowest p-value that express in Healthy (log2FoldChange<0)
+selectDown <- resOrdered.bipolar.normal$symbol[resOrdered.bipolar.normal$log2FoldChange<0][1:10]
+
+selected <- c(selectUp,selectDown)
+
+# create the heatmap
+pheatmap(normcounts[selected,], cluster_rows=TRUE,
+         show_colnames = FALSE, cluster_cols=TRUE, 
+         annotation_col=df, scale = 'row', cutree_cols = 2, cutree_rows = 2)
+```
