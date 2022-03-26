@@ -20,10 +20,7 @@ library(ggplot2)
 library(enrichplot)
 library(factoextra)
 library(pheatmap)
-library(org.Hs.eg.db)
 library(xCell)
-library(janitor)
-library(plotly)
 
 # function to read experiment designs from our datasets
 read_design <- function(filename) {
@@ -262,10 +259,25 @@ fviz_nbclust(normcounts.topGenes, FUN = hcut, method = "wss")
 
 dist_mat <- dist(normcounts.topGenes, method = 'euclidean')
 
+library(dendextend)
+
 # plot the cluster dendrogram
-hclust_avg <- hclust(dist_mat, method = 'average')
-plot(hclust_avg, cex = 0.6, hang = -1, xlab="", ylab ="", sub="", axes=F)
-rect.hclust(hclust_avg, k = 3, border = 2:8)
+hclust_avg <- dist_mat %>% hclust(method = 'average') %>% as.dendrogram
+
+# set colors
+colorlist <- labels(hclust_avg)
+colorlist <- sub("normal.*", "#00ba38", colorlist)
+colorlist <- sub("bipolar.*", "#f8766d", colorlist)
+colorlist <- sub("schizophrenia.*", "#619cff", colorlist)
+
+hclust_avg <- hclust_avg %>% 
+  set("leaves_pch", 19) %>%
+  set("leaves_cex", 1) %>%
+  set("leaves_col", colorlist) %>%
+  set("labels", "")
+
+plot(hclust_avg, ex = 0.6, hang = -1, xlab="", ylab ="", sub="", axes=F)
+rect.dendrogram(hclust_avg, k = 3, border = 2:8)
 ```
 
 Heatmap
