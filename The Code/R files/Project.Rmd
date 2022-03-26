@@ -245,11 +245,11 @@ Clustering, no interesting data
 # get normalized counts only for bipolar
 sampleFilter <- dds$Diagnosis != "schizophrenia"
 normcounts <- assay(vst(dds[,sampleFilter], blind=T))
-colnames(normcounts) <- paste0(dds$Diagnosis[sampleFilter], seq(1, ncol(normcounts)))
+colnames(normcounts) <- paste0(dds$Diagnosis[sampleFilter], "_", seq(1, ncol(normcounts)))
 var_per_gene <- apply(normcounts, 1, var)
 
 # take 1000 most significant genes
-selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:20])
+selectedGenes <- names(var_per_gene[order(var_per_gene, decreasing = T)][1:1000])
 selectedGenes <- genes
 
 normcounts.topGenes <- t(normcounts[selectedGenes,])
