@@ -1,4 +1,4 @@
-# Introduction-to-Bioinformatics-Final-Project
+# Introduction to Bioinformatics Final Project
 Bipolar disorder is a psychiatric illness which is characterized by extreme mood swings 
 between euphoria (mania) and depression. It is mainly genetic although the biological 
 mechanisms which are underlying it are mostly unknown. Therefore, it is yet unknown how 
